@@ -197,88 +197,175 @@
 # cv2.destroyAllWindows()
 
 
+# import cv2
+# import tkinter as tk
+# from PIL import Image, ImageTk
+# from cvzone.HandTrackingModule import HandDetector
+
+# # Initialize main window
+# root = tk.Tk()
+# root.title("Finger Counting using Hand Landmarks")
+
+# # Video display label
+# video_label = tk.Label(root)
+# video_label.pack()
+
+# # Exit button
+# exit_button = tk.Button(root, text="Exit", font=("Arial", 12), command=root.destroy)
+# exit_button.pack(pady=10)
+
+# # Webcam capture
+# cap = cv2.VideoCapture(0)
+# if not cap.isOpened():
+#     print("Error: Could not access the webcam.")
+#     root.destroy()
+
+# # Hand detector (track multiple hands)
+# detector = HandDetector(maxHands=2, detectionCon=0.8, minTrackCon=0.5)
+
+# def count_fingers(hand):
+#     fingers = []
+#     # Thumb (special case: depends on hand orientation)
+#     if hand['type'] == "Right":
+#         if hand['lmList'][4][0] > hand['lmList'][3][0]:
+#             fingers.append(1)
+#         else:
+#             fingers.append(0)
+#     else:  # Left hand
+#         if hand['lmList'][4][0] < hand['lmList'][3][0]:
+#             fingers.append(1)
+#         else:
+#             fingers.append(0)
+
+#     # Other 4 fingers
+#     for id in range(8, 21, 4):
+#         if hand['lmList'][id][1] < hand['lmList'][id - 2][1]:
+#             fingers.append(1)
+#         else:
+#             fingers.append(0)
+
+#     return sum(fingers)
+
+# # Update video frame
+# def update_frame():
+#     ret, frame = cap.read()
+#     if ret:
+#         frame = cv2.flip(frame, 1)
+#         hands, frame = detector.findHands(frame, draw=True)  # Draw landmarks and connections
+
+#         total_fingers = 0
+#         if hands:
+#             for hand in hands:
+#                 fingers_count = count_fingers(hand)
+#                 total_fingers += fingers_count
+#                 h, w, c = frame.shape
+#                 cx, cy = hand['center']
+#                 cv2.putText(frame,"", (cx - 50, cy + 50), cv2.FONT_HERSHEY_PLAIN,
+#                             4, (255, 0, 255), 4)
+
+#             cv2.putText(frame, f"Total Fingers: {total_fingers}", (10, 70), cv2.FONT_HERSHEY_PLAIN,
+#                         3, (255, 0, 255), 3)
+#         else:
+#             cv2.putText(frame, "No Hands Detected", (10, 70), cv2.FONT_HERSHEY_PLAIN,
+#                         3, (0, 0, 255), 3)
+
+#         # Display frame in tkinter
+#         frame = cv2.resize(frame, (700, 500))
+#         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+#         imgtk = ImageTk.PhotoImage(Image.fromarray(frame))
+#         video_label.imgtk = imgtk
+#         video_label.configure(image=imgtk)
+
+#     video_label.after(10, update_frame)
+
+# # Handle closing properly
+# def on_close():
+#     cap.release()
+#     cv2.destroyAllWindows()
+#     root.destroy()
+
+# root.protocol("WM_DELETE_WINDOW", on_close)
+# update_frame()
+# root.mainloop()
+# cap.release()
+# cv2.destroyAllWindows()
+
+
+
 import cv2
 import tkinter as tk
 from PIL import Image, ImageTk
 from cvzone.HandTrackingModule import HandDetector
+import numpy as np
+import math
+from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+from ctypes import cast, POINTER
+from comtypes import CLSCTX_ALL
+import screen_brightness_control as sbc
 
-# Initialize main window
+# Tkinter setup
 root = tk.Tk()
-root.title("Finger Counting using Hand Landmarks")
+root.title("Gesture Volume & Brightness Control")
 
-# Video display label
 video_label = tk.Label(root)
 video_label.pack()
+tk.Button(root, text="Exit", command=root.destroy).pack(pady=10)
 
-# Exit button
-exit_button = tk.Button(root, text="Exit", font=("Arial", 12), command=root.destroy)
-exit_button.pack(pady=10)
-
-# Webcam capture
+# Webcam
 cap = cv2.VideoCapture(0)
-if not cap.isOpened():
-    print("Error: Could not access the webcam.")
-    root.destroy()
 
-# Hand detector (track multiple hands)
+# Hand detector
 detector = HandDetector(maxHands=2, detectionCon=0.8, minTrackCon=0.5)
 
-def count_fingers(hand):
-    fingers = []
-    # Thumb (special case: depends on hand orientation)
-    if hand['type'] == "Right":
-        if hand['lmList'][4][0] > hand['lmList'][3][0]:
-            fingers.append(1)
-        else:
-            fingers.append(0)
-    else:  # Left hand
-        if hand['lmList'][4][0] < hand['lmList'][3][0]:
-            fingers.append(1)
-        else:
-            fingers.append(0)
+# Volume setup
+devices = AudioUtilities.GetSpeakers()
+interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+volume = cast(interface, POINTER(IAudioEndpointVolume))
+minVol, maxVol = volume.GetVolumeRange()[0:2]
 
-    # Other 4 fingers
-    for id in range(8, 21, 4):
-        if hand['lmList'][id][1] < hand['lmList'][id - 2][1]:
-            fingers.append(1)
-        else:
-            fingers.append(0)
-
-    return sum(fingers)
-
-# Update video frame
 def update_frame():
     ret, frame = cap.read()
-    if ret:
-        frame = cv2.flip(frame, 1)
-        hands, frame = detector.findHands(frame, draw=True)  # Draw landmarks and connections
+    if not ret:
+        return
 
-        total_fingers = 0
-        if hands:
-            for hand in hands:
-                fingers_count = count_fingers(hand)
-                total_fingers += fingers_count
-                h, w, c = frame.shape
-                cx, cy = hand['center']
-                cv2.putText(frame,"", (cx - 50, cy + 50), cv2.FONT_HERSHEY_PLAIN,
-                            4, (255, 0, 255), 4)
+    frame = cv2.flip(frame, 1)
+    hands, _ = detector.findHands(frame, draw=False)
 
-            cv2.putText(frame, f"Total Fingers: {total_fingers}", (10, 70), cv2.FONT_HERSHEY_PLAIN,
-                        3, (255, 0, 255), 3)
-        else:
-            cv2.putText(frame, "No Hands Detected", (10, 70), cv2.FONT_HERSHEY_PLAIN,
-                        3, (0, 0, 255), 3)
+    if hands:
+        for hand in hands:
+            lmList = hand['lmList']
+            handType = hand['type']
+            thumb_tip, index_tip = lmList[4], lmList[8]
 
-        # Display frame in tkinter
-        frame = cv2.resize(frame, (700, 500))
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        imgtk = ImageTk.PhotoImage(Image.fromarray(frame))
-        video_label.imgtk = imgtk
-        video_label.configure(image=imgtk)
+            cv2.circle(frame, thumb_tip[:2], 10, (0, 255, 0), cv2.FILLED)
+            cv2.circle(frame, index_tip[:2], 10, (0, 255, 0), cv2.FILLED)
+            cv2.line(frame, thumb_tip[:2], index_tip[:2], (0, 255, 0), 3)
 
+            distance = math.hypot(index_tip[0] - thumb_tip[0], index_tip[1] - thumb_tip[1])
+
+            if handType == "Left":
+                vol = np.interp(distance, [20, 200], [minVol, maxVol])
+                volume.SetMasterVolumeLevel(vol, None)
+                vol_display = int(np.interp(distance, [20, 200], [0, 100]))
+                cv2.putText(frame, f"Volume: {vol_display}%", (10, 60),
+                            cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2)
+
+            elif handType == "Right":
+                bright = int(np.interp(distance, [20, 200], [10, 100]))
+                sbc.set_brightness(bright)
+                cv2.putText(frame, f"Brightness: {bright}%", (10, 90),
+                            cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 255), 2)
+    else:
+        cv2.putText(frame, "No Hands Detected", (10, 70),
+                    cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), 2)
+
+    frame = cv2.resize(frame, (700, 500))
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    imgtk = ImageTk.PhotoImage(Image.fromarray(frame))
+    video_label.imgtk = imgtk
+    video_label.configure(image=imgtk)
     video_label.after(10, update_frame)
 
-# Handle closing properly
 def on_close():
     cap.release()
     cv2.destroyAllWindows()
@@ -287,5 +374,3 @@ def on_close():
 root.protocol("WM_DELETE_WINDOW", on_close)
 update_frame()
 root.mainloop()
-cap.release()
-cv2.destroyAllWindows()
